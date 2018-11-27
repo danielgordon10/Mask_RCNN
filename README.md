@@ -1,8 +1,10 @@
-# Mask R-CNN for Object Detection and Segmentation
-# This Repo is specifically pretrained on AI2-THOR and EQA and includes stuff for reproducing that pretraining.
-# It also improves over the original implementation by using tf.map_fn instead of slicing so now it works with variable sized batches and saves on memory overhead. 
-# It also reduces the bad Keras copying overhead to make it all much faster.
+## Changes from the original Repo:
+This Repo is specifically pretrained on AI2-THOR and EQA and includes stuff for reproducing that pretraining.
+It also improves over the original implementation by using tf.map_fn instead of slicing so now it works with variable sized batches and saves on memory overhead. 
+It also reduces the bad Keras copying overhead to make it all much faster.
 
+
+# Mask R-CNN for Object Detection and Segmentation
 This is an implementation of [Mask R-CNN](https://arxiv.org/abs/1703.06870) on Python 3, Keras, and TensorFlow. The model generates bounding boxes and segmentation masks for each instance of an object in the image. It's based on Feature Pyramid Network (FPN) and a ResNet101 backbone.
 
 ![Instance Segmentation Sample](assets/street.png)
