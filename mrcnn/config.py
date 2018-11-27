@@ -7,6 +7,7 @@ Licensed under the MIT License (see LICENSE for details)
 Written by Waleed Abdulla
 """
 
+import math
 import numpy as np
 
 
@@ -24,14 +25,14 @@ class Config(object):
     # experiment is running.
     NAME = None  # Override in sub-classes
 
-    # NUMBER OF GPUs to use. When using only a CPU, this needs to be set to 1.
+    # NUMBER OF GPUs to use. For CPU training, use 0
     GPU_COUNT = 1
 
     # Number of images to train with on each GPU. A 12GB GPU can typically
     # handle 2 images of 1024x1024px.
     # Adjust based on your GPU memory and image sizes. Use the highest
     # number that your GPU can handle for best performance.
-    IMAGES_PER_GPU = 2
+    IMAGES_PER_GPU = 8
 
     # Number of training steps per epoch
     # This doesn't need to match the size of the training set. Tensorboard
@@ -52,6 +53,7 @@ class Config(object):
     # You can also provide a callable that should have the signature
     # of model.resnet_graph. If you do so, you need to supply a callable
     # to COMPUTE_BACKBONE_SHAPE as well
+    #BACKBONE = "mobilenet224v1"
     BACKBONE = "resnet101"
 
     # Only useful if you supply a callable to BACKBONE. Should compute
@@ -90,9 +92,9 @@ class Config(object):
 
     # How many anchors per image to use for RPN training
     RPN_TRAIN_ANCHORS_PER_IMAGE = 256
-    
+
     # ROIs kept after tf.nn.top_k and before non-maximum suppression
-    PRE_NMS_LIMIT = 6000
+-   PRE_NMS_LIMIT = 6000
 
     # ROIs kept after non-maximum suppression (training and inference)
     POST_NMS_ROIS_TRAINING = 2000
@@ -104,7 +106,7 @@ class Config(object):
     MINI_MASK_SHAPE = (56, 56)  # (height, width) of the mini-mask
 
     # Input image resizing
-    # Generally, use the "square" resizing mode for training and predicting
+    # Generally, use the "square" resizing mode for training and inferencing
     # and it should work well in most cases. In this mode, images are scaled
     # up such that the small side is = IMAGE_MIN_DIM, but ensuring that the
     # scaling doesn't make the long side > IMAGE_MAX_DIM. Then the image is
@@ -131,13 +133,9 @@ class Config(object):
     # the width and height, or more, even if MIN_IMAGE_DIM doesn't require it.
     # Howver, in 'square' mode, it can be overruled by IMAGE_MAX_DIM.
     IMAGE_MIN_SCALE = 0
-    # Number of color channels per image. RGB = 3, grayscale = 1, RGB-D = 4
-    # Changing this requires other changes in the code. See the WIKI for more
-    # details: https://github.com/matterport/Mask_RCNN/wiki
-    IMAGE_CHANNEL_COUNT = 3
 
     # Image mean (RGB)
-    MEAN_PIXEL = np.array([123.7, 116.8, 103.9])
+    MEAN_PIXEL = np.array([123.7, 116.8, 103.9], dtype=np.float32)
 
     # Number of ROIs per image to feed to classifier/mask heads
     # The Mask RCNN paper uses 512 but often the RPN doesn't generate
@@ -204,7 +202,7 @@ class Config(object):
     # Train or freeze batch normalization layers
     #     None: Train BN layers. This is the normal mode
     #     False: Freeze BN layers. Good when using a small batch size
-    #     True: (don't use). Set layer in training mode even when predicting
+    #     True: (don't use). Set layer in training mode even when inferencing
     TRAIN_BN = False  # Defaulting to False since batch size is often small
 
     # Gradient norm clipping
@@ -217,15 +215,13 @@ class Config(object):
 
         # Input image size
         if self.IMAGE_RESIZE_MODE == "crop":
-            self.IMAGE_SHAPE = np.array([self.IMAGE_MIN_DIM, self.IMAGE_MIN_DIM,
-                self.IMAGE_CHANNEL_COUNT])
+            self.IMAGE_SHAPE = np.array([self.IMAGE_MIN_DIM, self.IMAGE_MIN_DIM, 3])
         else:
-            self.IMAGE_SHAPE = np.array([self.IMAGE_MAX_DIM, self.IMAGE_MAX_DIM,
-                self.IMAGE_CHANNEL_COUNT])
+            self.IMAGE_SHAPE = np.array([self.IMAGE_MAX_DIM, self.IMAGE_MAX_DIM, 3])
 
         # Image meta data length
         # See compose_image_meta() for details
-        self.IMAGE_META_SIZE = 1 + 3 + 3 + 4 + 1 + self.NUM_CLASSES
+        self.IMAGE_META_SIZE = 1 + 1 + 3 + 3 + 4 + 1 + self.NUM_CLASSES
 
     def display(self):
         """Display Configuration values."""

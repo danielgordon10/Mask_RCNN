@@ -74,7 +74,7 @@ class CocoConfig(Config):
     to the COCO dataset.
     """
     # Give the configuration a recognizable name
-    NAME = "coco"
+    NAME = "imagenet"
 
     # We use a GPU with 12GB memory, which can fit two images.
     # Adjust down if you use a smaller GPU.
@@ -428,6 +428,15 @@ if __name__ == '__main__':
                         metavar="<True|False>",
                         help='Automatically download and unzip MS-COCO files (default=False)',
                         type=bool)
+    parser.add_argument('--backbone', required=False,
+                        default="resnet50",
+                        metavar="<backbone>",
+                        help='Feature Pyramid Network backbone type')
+    parser.add_argument('--train_bn', required=False,
+                        default=False,
+                        metavar="<True|False>",
+                        help='Train batch norm layers (default=False)',
+                        type=bool)
     args = parser.parse_args()
     print("Command: ", args.command)
     print("Model: ", args.model)
@@ -435,6 +444,7 @@ if __name__ == '__main__':
     print("Year: ", args.year)
     print("Logs: ", args.logs)
     print("Auto Download: ", args.download)
+    print("Backbone: ", args.backbone)
 
     # Configurations
     if args.command == "train":
@@ -448,6 +458,18 @@ if __name__ == '__main__':
             DETECTION_MIN_CONFIDENCE = 0
         config = InferenceConfig()
     config.display()
+
+
+    # Configure backbone architecture
+    if args.backbone.lower() == "resnet50":
+        config.BACKBONE = "resnet50"
+    elif args.backbone.lower() == "mobilenet224v1":
+        config.BACKBONE = "mobilenet224v1"
+
+
+    if args.train_bn:
+        config.TRAIN_BN = True
+
 
     # Create model
     if args.command == "train":
@@ -479,14 +501,12 @@ if __name__ == '__main__':
         # validation set, as as in the Mask RCNN paper.
         dataset_train = CocoDataset()
         dataset_train.load_coco(args.dataset, "train", year=args.year, auto_download=args.download)
-        if args.year in '2014':
-            dataset_train.load_coco(args.dataset, "valminusminival", year=args.year, auto_download=args.download)
+        dataset_train.load_coco(args.dataset, "valminusminival", year=args.year, auto_download=args.download)
         dataset_train.prepare()
 
         # Validation dataset
         dataset_val = CocoDataset()
-        val_type = "val" if args.year in '2017' else "minival"
-        dataset_val.load_coco(args.dataset, val_type, year=args.year, auto_download=args.download)
+        dataset_val.load_coco(args.dataset, "minival", year=args.year, auto_download=args.download)
         dataset_val.prepare()
 
         # Image Augmentation
@@ -505,11 +525,16 @@ if __name__ == '__main__':
 
         # Training - Stage 2
         # Finetune layers from ResNet stage 4 and up
-        print("Fine tune Resnet stage 4 and up")
+        if config.BACKBONE == "mobilenet224v1":
+            stage_2_layers = '11M+'
+        else:
+            stage_2_layers = '4+'
+
+        print("Fine tune {} stage {} and up".format(config.BACKBONE, stage_2_layers))        
         model.train(dataset_train, dataset_val,
                     learning_rate=config.LEARNING_RATE,
                     epochs=120,
-                    layers='4+',
+                    layers=stage_2_layers,
                     augmentation=augmentation)
 
         # Training - Stage 3
@@ -524,8 +549,7 @@ if __name__ == '__main__':
     elif args.command == "evaluate":
         # Validation dataset
         dataset_val = CocoDataset()
-        val_type = "val" if args.year in '2017' else "minival"
-        coco = dataset_val.load_coco(args.dataset, val_type, year=args.year, return_coco=True, auto_download=args.download)
+        coco = dataset_val.load_coco(args.dataset, "minival", year=args.year, return_coco=True, auto_download=args.download)
         dataset_val.prepare()
         print("Running COCO evaluation on {} images.".format(args.limit))
         evaluate_coco(model, dataset_val, coco, "bbox", limit=int(args.limit))

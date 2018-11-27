@@ -9,16 +9,20 @@ Written by Waleed Abdulla
 
 import os
 import sys
+import logging
 import random
 import itertools
 import colorsys
 
 import numpy as np
 from skimage.measure import find_contours
+import matplotlib
+matplotlib.use('agg')
 import matplotlib.pyplot as plt
 from matplotlib import patches,  lines
 from matplotlib.patches import Polygon
 import IPython.display
+from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 
 # Root directory of the project
 ROOT_DIR = os.path.abspath("../")
@@ -40,7 +44,7 @@ def display_images(images, titles=None, cols=4, cmap=None, norm=None,
     cols: number of images per row
     cmap: Optional. Color map to use. For example, "Blues".
     norm: Optional. A Normalize instance to map values to colors.
-    interpolation: Optional. Image interpolation to use for display.
+    interpolation: Optional. Image interporlation to use for display.
     """
     titles = titles if titles is not None else [""] * len(images)
     rows = len(images) // cols + 1
@@ -50,8 +54,9 @@ def display_images(images, titles=None, cols=4, cmap=None, norm=None,
         plt.subplot(rows, cols, i)
         plt.title(title, fontsize=9)
         plt.axis('off')
-        plt.imshow(image.astype(np.uint8), cmap=cmap,
-                   norm=norm, interpolation=interpolation)
+        if image.size > 0:
+            plt.imshow(image.squeeze().astype(np.uint8), cmap=cmap,
+                       norm=norm, interpolation=interpolation)
         i += 1
     plt.show()
 
@@ -84,7 +89,8 @@ def display_instances(image, boxes, masks, class_ids, class_names,
                       scores=None, title="",
                       figsize=(16, 16), ax=None,
                       show_mask=True, show_bbox=True,
-                      colors=None, captions=None):
+                      colors=None, captions=None,
+                      fig=None, plot=True):
     """
     boxes: [num_instance, (y1, x1, y2, x2, class_id)] in image coordinates.
     masks: [height, width, num_instances]
@@ -105,10 +111,8 @@ def display_instances(image, boxes, masks, class_ids, class_names,
         assert boxes.shape[0] == masks.shape[-1] == class_ids.shape[0]
 
     # If no axis is passed, create one and automatically call show()
-    auto_show = False
     if not ax:
-        _, ax = plt.subplots(1, figsize=figsize)
-        auto_show = True
+        fig, ax = plt.subplots(1, figsize=figsize)
 
     # Generate random colors
     colors = colors or random_colors(N)
@@ -164,8 +168,17 @@ def display_instances(image, boxes, masks, class_ids, class_names,
             p = Polygon(verts, facecolor="none", edgecolor=color)
             ax.add_patch(p)
     ax.imshow(masked_image.astype(np.uint8))
-    if auto_show:
+
+    if plot:
         plt.show()
+    else:
+        canvas = FigureCanvas(fig)
+        canvas.draw()
+        width, height = fig.get_size_inches() * fig.get_dpi()
+
+        ax_image = np.fromstring(canvas.tostring_rgb(), dtype=np.uint8).reshape(int(height), int(width), 3)
+        plt.close(fig)
+        return ax_image
 
 
 def display_differences(image,
@@ -173,7 +186,7 @@ def display_differences(image,
                         pred_box, pred_class_id, pred_score, pred_mask,
                         class_names, title="", ax=None,
                         show_mask=True, show_box=True,
-                        iou_threshold=0.5, score_threshold=0.5):
+                        iou_threshold=0.5, score_threshold=0.5, plot=True):
     """Display ground truth and prediction instances on the same image."""
     # Match predictions to ground truth
     gt_match, pred_match, overlaps = utils.compute_matches(
@@ -197,13 +210,14 @@ def display_differences(image,
     # Set title if not provided
     title = title or "Ground Truth and Detections\n GT=green, pred=red, captions: score/IoU"
     # Display
-    display_instances(
+    ax_image = display_instances(
         image,
         boxes, masks, class_ids,
         class_names, scores, ax=ax,
         show_bbox=show_box, show_mask=show_mask,
         colors=colors, captions=captions,
-        title=title)
+        title=title, plot=plot)
+    return ax_image
 
 
 def draw_rois(image, rois, refined_rois, mask, class_ids, class_names, limit=10):
@@ -290,6 +304,7 @@ def display_top_masks(image, mask, class_ids, class_names, limit=4):
     unique_class_ids = np.unique(class_ids)
     mask_area = [np.sum(mask[:, :, np.where(class_ids == i)[0]])
                  for i in unique_class_ids]
+
     top_ids = [v[0] for v in sorted(zip(unique_class_ids, mask_area),
                                     key=lambda r: r[1], reverse=True) if v[1] > 0]
     # Generate images and titles
@@ -324,7 +339,7 @@ def plot_overlaps(gt_class_ids, pred_class_ids, pred_scores,
     gt_class_ids: [N] int. Ground truth class IDs
     pred_class_id: [N] int. Predicted class IDs
     pred_scores: [N] float. The probability scores of predicted classes
-    overlaps: [pred_boxes, gt_boxes] IoU overlaps of predictions and GT boxes.
+    overlaps: [pred_boxes, gt_boxes] IoU overlaps of predictins and GT boxes.
     class_names: list of all class names in the dataset
     threshold: Float. The prediction probability required to predict a class
     """
@@ -360,7 +375,7 @@ def plot_overlaps(gt_class_ids, pred_class_ids, pred_scores,
 def draw_boxes(image, boxes=None, refined_boxes=None,
                masks=None, captions=None, visibilities=None,
                title="", ax=None):
-    """Draw bounding boxes and segmentation masks with different
+    """Draw bounding boxes and segmentation masks with differnt
     customizations.
 
     boxes: [N, (y1, x1, y2, x2, class_id)] in image coordinates.
@@ -369,7 +384,7 @@ def draw_boxes(image, boxes=None, refined_boxes=None,
     masks: [N, height, width]
     captions: List of N titles to display on each box
     visibilities: (optional) List of values of 0, 1, or 2. Determine how
-        prominent each bounding box should be.
+        prominant each bounding box should be.
     title: An optional title to show over the image
     ax: (optional) Matplotlib axis to draw on.
     """
