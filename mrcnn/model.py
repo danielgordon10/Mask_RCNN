@@ -1593,7 +1593,7 @@ def load_image_gt(dataset, config, image_id, augment=False, augmentation=None,
         defined in MINI_MASK_SHAPE.
     """
     # Load image and mask
-    image, angle = dataset.load_image(image_id)
+    image = dataset.load_image(image_id)
     mask, class_ids = dataset.load_mask(image_id)
     original_shape = image.shape
     image, window, scale, padding, crop = utils.resize_image(
@@ -1665,7 +1665,7 @@ def load_image_gt(dataset, config, image_id, augment=False, augmentation=None,
         mask = utils.minimize_mask(bbox, mask, config.MINI_MASK_SHAPE)
 
     # Image meta data
-    image_meta = compose_image_meta(image_id, angle, original_shape, image.shape,
+    image_meta = compose_image_meta(image_id, original_shape, image.shape,
                                     window, scale, active_class_ids)
 
     return image, image_meta, class_ids, bbox, mask
@@ -2301,17 +2301,6 @@ class MaskRCNN():
         # subsampling from P5 with stride of 2.
         P6 = KL.MaxPooling2D(pool_size=(1, 1), strides=2, name="fpn_p6")(P5)
 
-        if constants.DETECTION_USE_ANGLE:
-            # Concatenate on angle to all the feature maps.
-            input_image_angle = KL.Lambda(lambda x: parse_image_meta_graph(x)["image_angle"])(input_image_meta)
-            input_image_angle_spatial = input_image_angle[:, tf.newaxis, tf.newaxis, tf.newaxis]
-            P_concat = KL.Lambda(lambda P_val: tf.concat((P_val, tf.tile(input_image_angle_spatial, tf.stack((1, tf.shape(P_val)[1], tf.shape(P_val)[2], 1)))), axis=-1))
-            P2 = P_concat(P2)
-            P3 = P_concat(P3)
-            P4 = P_concat(P4)
-            P5 = P_concat(P5)
-            P6 = P_concat(P6)
-
         # Note that P6 is used in RPN, but not in the classifier heads.
         rpn_feature_maps = [P2, P3, P4, P5, P6]
         mrcnn_feature_maps = [P2, P3, P4, P5]
@@ -2798,7 +2787,7 @@ class MaskRCNN():
                 epoch = int(m.group(1))
         self.keras_model.save_weights(os.path.join(self.log_dir, 'last_checkpoint_%04d.h5' % epoch))
 
-    def mold_inputs(self, images, image_angles):
+    def mold_inputs(self, images):
         """Takes a list of images and modifies them to the format expected
         as an input to the neural network.
         images: List of image matricies [height,width,depth]. Images can have
@@ -2825,7 +2814,7 @@ class MaskRCNN():
             molded_image = mold_image(molded_image, self.config)
             # Build image_meta
             image_meta = compose_image_meta(
-                0, image_angles[ii], image.shape, molded_image.shape, window, scale,
+                0, image.shape, molded_image.shape, window, scale,
                 np.zeros([self.config.NUM_CLASSES], dtype=np.int32))
             # Append
             molded_images.append(molded_image)
@@ -2902,7 +2891,7 @@ class MaskRCNN():
 
         return boxes, class_ids, scores, full_masks
 
-    def detect(self, images, angles=None, verbose=0):
+    def detect(self, images, verbose=0):
         """Runs the detection pipeline.
 
         images: List of images, potentially of different sizes.
@@ -2917,8 +2906,6 @@ class MaskRCNN():
         t0 = time.time()
         assert self.mode == "inference", "Create model in inference mode."
         #assert len(images) == self.config.BATCH_SIZE, "len(images) must be equal to BATCH_SIZE"
-        if angles is None:
-            angles = np.zeros(len(images))
 
         if verbose:
             log("Processing {} images".format(len(images)))
@@ -2927,7 +2914,7 @@ class MaskRCNN():
 
         # Mold inputs to format expected by the neural network
         t1 = time.time()
-        molded_images, image_metas, windows = self.mold_inputs(images, angles)
+        molded_images, image_metas, windows = self.mold_inputs(images)
         t2 = time.time()
 
         # Validate image sizes
@@ -3115,7 +3102,7 @@ class MaskRCNN():
                 layers.append(l)
         return layers
 
-    def run_graph(self, images, angles, outputs, image_metas=None):
+    def run_graph(self, images, outputs, image_metas=None):
         """Runs a sub-set of the computation graph that computes the given
         outputs.
 
@@ -3143,7 +3130,7 @@ class MaskRCNN():
 
         # Prepare inputs
         if image_metas is None:
-            molded_images, image_metas, _ = self.mold_inputs(images, angles)
+            molded_images, image_metas, _ = self.mold_inputs(images)
         else:
             molded_images = images
         image_shape = molded_images[0].shape
@@ -3172,7 +3159,7 @@ class MaskRCNN():
 #  Data Formatting
 ############################################################
 
-def compose_image_meta(image_id, image_angle, original_image_shape, image_shape,
+def compose_image_meta(image_id, original_image_shape, image_shape,
                        window, scale, active_class_ids):
     """Takes attributes of an image and puts them in one 1D array.
 
@@ -3188,12 +3175,11 @@ def compose_image_meta(image_id, image_angle, original_image_shape, image_shape,
     """
     meta = np.array(
         [image_id] +                  # size=1
-        [image_angle] +               # size=1
         list(original_image_shape) +  # size=3
         list(image_shape) +           # size=3
         list(window) +                # size=4 (y1, x1, y2, x2) in image cooredinates
         [scale] +                     # size=1
-        list(active_class_ids),        # size=num_classes
+        list(active_class_ids),       # size=num_classes
         dtype=np.float32
     )
     return meta
@@ -3208,15 +3194,13 @@ def parse_image_meta(meta):
     Returns a dict of the parsed values.
     """
     image_id = meta[:, 0]
-    image_angle = meta[:, 1]
-    original_image_shape = meta[:, 2:5]
-    image_shape = meta[:, 5:8]
-    window = meta[:, 8:12]  # (y1, x1, y2, x2) window of image in in pixels
-    scale = meta[:, 12]
-    active_class_ids = meta[:, 13:]
+    original_image_shape = meta[:, 1:4]
+    image_shape = meta[:, 4:7]
+    window = meta[:, 7:11]  # (y1, x1, y2, x2) window of image in in pixels
+    scale = meta[:, 11]
+    active_class_ids = meta[:, 12:]
     return {
         "image_id": image_id.astype(np.int32),
-        "image_angle": image_angle.astype(np.int32),
         "original_image_shape": original_image_shape.astype(np.int32),
         "image_shape": image_shape.astype(np.int32),
         "window": window.astype(np.int32),
@@ -3234,15 +3218,13 @@ def parse_image_meta_graph(meta):
     Returns a dict of the parsed tensors.
     """
     image_id = meta[:, 0]
-    image_angle = meta[:, 1]
-    original_image_shape = meta[:, 2:5]
-    image_shape = meta[:, 5:8]
-    window = meta[:, 8:12]  # (y1, x1, y2, x2) window of image in in pixels
-    scale = meta[:, 12]
-    active_class_ids = meta[:, 13:]
+    original_image_shape = meta[:, 1:4]
+    image_shape = meta[:, 4:7]
+    window = meta[:, 7:11]  # (y1, x1, y2, x2) window of image in in pixels
+    scale = meta[:, 11]
+    active_class_ids = meta[:, 12:]
     return {
         "image_id": image_id,
-        "image_angle": image_angle,
         "original_image_shape": original_image_shape,
         "image_shape": image_shape,
         "window": window,

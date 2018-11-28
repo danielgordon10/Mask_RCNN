@@ -39,7 +39,6 @@ else:
         from Queue import Queue
 
 # Directory to save logs and trained model
-
 if constants.EQA:
     model_path = 'eqa'
 else:
@@ -109,7 +108,6 @@ class ObjectDetector(object):
                 while not self.exit_flag:
                     num_its += 1
                     ids = []
-                    #images = [np.zeros((2, 2, 3), dtype=np.uint8) for _ in range(self.batch_size)]
                     images = []
 
                     current_id, current_image = self.input_queue.get()
@@ -140,7 +138,6 @@ class ObjectDetector(object):
                         detection_count += size
 
                     if num_its % 10 == 0:
-                        #print('running Mask RCNN of size', size, ids, py_util.get_time_str())
                         print('--- Thread %d, Total detection time --- %.3f, # images: %d, current: %.3f, moving mean: %.3f, global mean: %.3f' %
                               (model_ind, detection_time, size, detection_time / size, moving_mean_detection_time,
                                (total_detection_time / max(1, detection_count))))
@@ -173,22 +170,8 @@ class ObjectDetector(object):
 
     @staticmethod
     def visualize_detections(image, boxes, scores, classes, masks=None):
-        '''
-        if masks is not None:
-            masks = masks.transpose(1, 2, 0)
-            boxes = boxes[:, [1, 0, 3, 2]].copy()  # xyxy -> yxyx
-            classes = np.array([constants.OBJECT_CLASS_TO_ID[cls] for cls in classes])
-            detection_image = visualize.display_instances(image, boxes, masks, classes, constants.OBJECTS, scores,
-                                                          plot=False)
-            return detection_image
-        else:
-        '''
         out_image = image.copy()
         out_image = cv2.resize(out_image, (constants.SCREEN_WIDTH, constants.SCREEN_HEIGHT))
-
-        #if masks is None and len(boxes) > 0:
-            #boxes = (boxes / np.array([constants.SCREEN_HEIGHT * 1.0 / image.shape[1],
-                                       #constants.SCREEN_WIDTH * 1.0 / image.shape[0]])[[0, 1, 0, 1]]).astype(np.int32)
         for ii, box in enumerate(boxes):
             mask = None if masks is None else masks[ii]
             drawing.draw_detection_box(out_image, box, classes[ii], confidence=scores[ii], width=2, mask=mask)
@@ -248,7 +231,6 @@ def main():
             thread = threading.Thread(target=run_detector, args=(object_pipes,))
         threads.append(thread)
 
-
     start_time = time.time()
     for thread in threads:
         thread.start()
@@ -264,6 +246,7 @@ def main():
 
     print('total time %.3f' % total_time)
     print('per image time %.3f' % (total_time / NUM_IMAGES))
+
 
 if __name__ == '__main__':
     main()

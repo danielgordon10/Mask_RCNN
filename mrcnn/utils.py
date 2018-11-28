@@ -832,7 +832,6 @@ def batch_slice(inputs, graph_fn, output_dtype, batch_size=None): #, names=None)
     names: If provided, assigns names to the resulting tensors.
     """
 
-    #with tf.name_scope(name):
     if not constants.TRAIN_MASK_RCNN:
         result = tf.map_fn(
             lambda elems: graph_fn(*elems),
@@ -840,6 +839,8 @@ def batch_slice(inputs, graph_fn, output_dtype, batch_size=None): #, names=None)
             dtype=output_dtype,
         )
     else:
+        # A tensorflow bug stops map_fn from working properly in training mode, but usually training is fixed batch
+        # size so it's ok, just less memory efficient.
         if not isinstance(inputs, list):
             inputs = [inputs]
 

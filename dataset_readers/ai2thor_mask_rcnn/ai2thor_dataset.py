@@ -34,8 +34,6 @@ from dataset_readers.ai2thor_mask_rcnn import ai2thor_dataset
 sys.path.append(os.path.join(ROOT_DIR, os.pardir))
 import constants
 
-USE_HDF5 = False
-
 DATA_FOLDER = os.path.join(ROOT_DIR, 'data/ai2thor/train/')
 
 # Directory to save logs and trained model
@@ -95,18 +93,8 @@ class AI2THORConfig(Config):
 class AI2THORDataset(utils.Dataset):
     def __init__(self):
         super(AI2THORDataset, self).__init__()
-        if USE_HDF5:
-            data_file_name = glob.glob(DATA_FOLDER + '*.h5')[-1]
-            self.dataset = h5py.File(data_file_name, 'r')
-            self.num_entries = len(self.dataset['images/seg_images'])
-        else:
-            self.image_names = sorted(glob.glob(os.path.join(DATA_FOLDER, 'color_images', '*.jpg')))
-            #self.label_names = sorted(glob.glob(os.path.join(DATA_FOLDER, 'seg_images', '*.png')))
-            #self.class_labels = sorted(glob.glob(os.path.join(DATA_FOLDER, 'class_labels', '*.npy')))
-            #self.class_labels = np.load(os.path.join(DATA_FOLDER, 'class_labels.npy'))
-            #self.num_objects = np.load(os.path.join(DATA_FOLDER, 'num_objects.npy'))
-            self.num_entries = len(self.image_names)
-            #self.angle = np.load(os.path.join(DATA_FOLDER, 'angle.npy'))
+        self.image_names = sorted(glob.glob(os.path.join(DATA_FOLDER, 'color_images', '*.jpg')))
+        self.num_entries = len(self.image_names)
 
         self.num_entries_train = int(self.num_entries * 4 / 5)
         self.num_entries_val = self.num_entries - self.num_entries_train
@@ -128,10 +116,6 @@ class AI2THORDataset(utils.Dataset):
         elif subset in {'val_seen', 'val_unseen'}:
             DATA_FOLDER = os.path.join(ROOT_DIR, 'data/ai2thor/%s/' % subset)
             self.image_names = sorted(glob.glob(os.path.join(DATA_FOLDER, 'color_images', '*.jpg')))
-            #self.label_names = sorted(glob.glob(os.path.join(DATA_FOLDER, 'seg_images', '*.png')))
-            #self.class_labels = sorted(glob.glob(os.path.join(DATA_FOLDER, 'class_labels', '*.npy')))
-            #self.class_labels = np.load(os.path.join(DATA_FOLDER, 'class_labels.npy'))
-            #self.num_objects = np.load(os.path.join(DATA_FOLDER, 'num_objects.npy'))
             self.num_entries = len(self.image_names)
             for ii in range(self.num_entries):
                 self.add_image(
@@ -144,37 +128,21 @@ class AI2THORDataset(utils.Dataset):
 
     def load_image(self, image_id):
         image_id = self.image_info[image_id]['id']
-        if USE_HDF5:
-            return self.dataset['images/color_images'][image_id, ...]
-        else:
-            #return (cv2.imread(self.image_names[image_id])[:, :, ::-1], self.angle[image_id])
-            return (cv2.imread(self.image_names[image_id])[:, :, ::-1], 0)
+        return (cv2.imread(self.image_names[image_id])[:, :, ::-1], 0)
 
     def load_mask(self, image_id):
         image_id = self.image_info[image_id]['id']
-        if USE_HDF5:
-            mask = self.dataset['images/seg_images'][image_id, ...]
-            num_objects = self.dataset['images/num_objects'][image_id, ...].squeeze()
-            classes = self.dataset['images/class_labels'][image_id, ...]
-            classes = classes[1:num_objects + 1].astype(np.int32)
-        else:
-            label_name = self.image_names[image_id].replace('color_images', 'seg_images')[:-4] + '.png'
-            mask = cv2.imread(label_name)[:, :, 0]  # Opencv reads 3 channel, but they're all the same.
-            class_label_name = self.image_names[image_id].replace('color_images', 'class_labels')[:-4] + '.npy'
-            class_labels = np.load(class_label_name)
-            num_objects = class_labels[0]
-            classes = class_labels[2:2 + num_objects].astype(np.int32)
-            #num_objects = self.num_objects[image_id].squeeze()
-            #classes = self.class_labels[image_id, ...]
+        label_name = self.image_names[image_id].replace('color_images', 'seg_images')[:-4] + '.png'
+        mask = cv2.imread(label_name)[:, :, 0]  # Opencv reads 3 channel, but they're all the same.
+        class_label_name = self.image_names[image_id].replace('color_images', 'class_labels')[:-4] + '.npy'
+        class_labels = np.load(class_label_name)
+        num_objects = class_labels[0]
+        classes = class_labels[2:2 + num_objects].astype(np.int32)
         mask = np.eye(num_objects + 1)[mask][:, :, 1:]
         return mask, classes
 
     def image_reference(self, image_id):
         return image_id
-
-
-
-
 
 
 ############################################################
