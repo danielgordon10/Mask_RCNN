@@ -3,6 +3,10 @@ This Repo is specifically pretrained on AI2-THOR and EQA and includes stuff for 
 It also improves over the original implementation by using tf.map_fn instead of slicing so now it works with variable sized batches and saves on memory overhead. 
 It also reduces the bad Keras copying overhead to make it all much faster.
 
+### AI2THOR
+<img src="/test_images/ai2thor/val_unseen/input/0016.jpg" height="300"/> <img src="/test_images/ai2thor/val_unseen/output/0016.jpg" height="300"/> 
+### EQA
+<img src="/test_images/eqa/val_unseen/input/0040.jpg" height="300"/> <img src="/test_images/eqa/val_unseen/output/0040.jpg" height="300"/> 
 
 # Mask R-CNN for Object Detection and Segmentation
 This is an implementation of [Mask R-CNN](https://arxiv.org/abs/1703.06870) on Python 3, Keras, and TensorFlow. The model generates bounding boxes and segmentation masks for each instance of an object in the image. It's based on Feature Pyramid Network (FPN) and a ResNet101 backbone.
